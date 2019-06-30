@@ -70,12 +70,12 @@ k(17) = 1e-4; % uM^-1*s^-1
 k(18) = 3.2; % uM^-1*s^-1
 % Oxidized Thioredoxin reduced by TrxR
 k(19) = 20; % uM^-1*s^-1
-% Production of NADPH by G6P-DH
+% Regeneration of NADPH
 k(20) = 3.75e2; % uM/s 
-% GSH synthesis
-k(21) = 4.1e-1; % uM/s
-% Trx_SH synthesis
-k(22) = 6.97e-4; % uM/s
+% GSH import
+k(21) = 4.8e-1; % uM/s
+% GSH export + degradation
+k(22) = 3.2e-2; % uM/s
 %Prx5-SH oxidized by H2O2
 k(23) = 3e-1; %uM^-1 s^-1
 %Prx5-SOH auto-catalyzes to Prx5-SS
@@ -174,7 +174,7 @@ tic
 [t,x]=ode15s(@crank,tspan,x0,options,k);
 toc
 out = [t, x];
-filename = 'HeLa_srxn1.xlsx';
+filename = 'HeLa_srxn1_notrx.xlsx';
 xlswrite(filename,out,q,'B3');
 
 %%
@@ -187,7 +187,7 @@ dxdt(2) = -k(2)*x(2)*x(1) + k(4)*x(4)*x(5); % GPX1red
 dxdt(3) = k(2)*x(2)*x(1) - k(3)*x(3)*x(5); % GPX1ox
 dxdt(4) = k(3)*x(3)*x(5) - k(4)*x(4)*x(5); % GPX1-SG
 dxdt(5) = -k(3)*x(3)*x(5) - k(4)*x(4)*x(5) - 2*k(11)*x(5)... 
-    - k(13)*x(14)*x(5) - k(15)*x(17)*x(5) + 2*k(18)*x(6)*x(20) + k(21)...
+    - k(13)*x(14)*x(5) - k(15)*x(17)*x(5) + 2*k(18)*x(6)*x(20) + k(21) - k(22)...
     - k(27)*x(26)*x(5) - k(4)*x(27)*x(5); % GSH
 dxdt(6) = k(4)*x(4)*x(5) + k(11)*x(5) + k(15)*x(17)*x(5) + k(4)*x(27)*x(5) - k(18)*x(6)*x(20); % GSSG
 dxdt(7) = -k(6)*x(7)*x(1) + k(10)*x(10)*x(11); % Prx3-SH
@@ -195,7 +195,7 @@ dxdt(8) = k(6)*x(7)*x(1) - k(7)*x(8)*x(1) + k(8)*x(9)*x(28) - k(9)*x(8); % Prx-S
 dxdt(9) = k(7)*x(8)*x(1) - k(8)*x(9)*x(28); % Prx-SOOH
 dxdt(10) = k(9)*x(8) - k(10)*x(10)*x(11); % Prx3-SS
 dxdt(11) = -k(10)*x(10)*x(11) - k(17)*x(19)*x(11) - k(25)*x(24)*x(11)...
-    + k(19)*x(12)*x(20) + k(22); % Trx-SH
+    + k(19)*x(12)*x(20); % Trx-SH
 dxdt(12) = k(10)*x(10)*x(11) + k(17)*x(19)*x(11) + k(25)*x(24)*x(11)...
     - k(19)*x(12)*x(20); % Trx-SS
 dxdt(13) = -k(12)*x(13)*x(1) + k(14)*x(16)*x(15); % Pr-SH
