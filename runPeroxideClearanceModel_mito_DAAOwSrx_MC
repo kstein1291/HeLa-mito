@@ -1,0 +1,226 @@
+function out = runPeroxideClearanceModel_mito_DAAOwSrx_MC(x0)
+% Objectives:
+%       Monte Carlo random sampling and simulations with kefflux term.
+% Description:
+%       The kefflux terms and kDAAO terms will be varied depending on high
+%       and low conditions
+%       Case I: 
+%           kDAAO high represents (min max) as (50 100) uM/s &
+%           kefflux high with (50 100) 1/s
+%       Case II:
+%           kDAAO high with (50 100) uM/s &
+%           kefflux low represents (0 50) 1/s
+%       
+% Input:
+%       x0: The basal concentrations obtained from runPeroxideClearanceModel_mito_Srx.m
+%           The x0 corresponds to the end row of the 3rd cell, except the
+%           first column. x0 is 1 by 28.
+%
+% Output: 
+%         5 excel files will be generated that store values of [H2O2,
+%         Prx3-SH, Prx3-SS, Prx3-SOOH, Prx3 dimer fraction] based on
+%         varying kefflux and kDAAO values. Columns represent time and the row represents each iteration
+%         2 excel files are randomly generated initial kefflux and kDAAO values 
+
+%% Determine the case 
+% Case I : kDAAO high, kefflux high
+kDAAO_min = 50; kDAAO_max = 100;
+kefflux_min = 50; kefflux_max = 100;
+
+% % Case II : kDAAO high, kefflux low
+% kd_min = 50; kd_max = 100;
+% kefflux_min = 0; kefflux_max = 50;
+
+%% Number of samples to be generated
+n = 1e4;
+
+%% Timesapn
+ti = 0; 
+tf = 3600; % sec
+delt = 60;
+tspan = [ti:delt:tf];
+
+%% Initialization
+kDAAO_initial_storage = zeros(length(n),1);
+kefflux_initial_storage = zeros(length(n),1);
+
+H2O2pos_storage = zeros(length(n),length(tspan));
+Prx3SHpos_storage = zeros(length(n),length(tspan));
+Prx3SSpos_storage = zeros(length(n),length(tspan));
+Prx3SOOHpos_storage = zeros(length(n),length(tspan));
+Prx3_oxidationFraction_storage = zeros(length(n),length(tspan));
+
+%% Position of redox species
+H2O2pos = 1;
+Prx3SHpos = 7;
+Prx3SSpos = 10;
+Prx3SOOHpos = 9;
+Prx3_oxidation_pos = 29;
+
+
+for m=1:n
+    kDAAO = kDAAO_min + rand*(kDAAO_max-kDAAO_min); % Generate random inputs
+    kefflux = kefflux_min + rand*(kefflux_max-kefflux_min); % Generate random inputs
+    
+    [OUT]=PeroxideClearanceModel_HeLa_DAAOmito_efflux(kDAAO,kefflux,tspan,x0);
+    kDAAO_initial_storage(m,1)= kDAAO;
+    kefflux_initial_storage(m,1)= kefflux;
+
+    H2O2pos_storage(m,:) = OUT(:,H2O2pos+1);  
+    Prx3SHpos_storage(m,:) = OUT(:,Prx3SHpos+1);
+    Prx3SSpos_storage(m,:) = OUT(:,Prx3SSpos+1); 
+    Prx3SOOHpos_storage(m,:) = OUT(:,Prx3SOOHpos+1); 
+    Prx3_oxidationFraction_storage(m,:) = OUT(:,Prx3_oxidation_pos+1); 
+
+
+end
+
+% Write matrix : First row is the time and the second row is corresponding
+% value or redox species at designated time
+    writematrix(kDAAO_initial_storage,'DAAO_Data_RandomSampling_Initial_kDAAO.xlsx')    
+    writematrix([kefflux_initial_storage],'DAAO_Data_RandomSampling_Initial_kefflux.xlsx')
+    writematrix([tspan;H2O2pos_storage],'DAAO_Data_RandomSampling_H2O2pos_storage.xlsx')
+    writematrix([tspan;Prx3SHpos_storage],'DAAO_Data_RandomSampling_Prx3SHpos_storage.xlsx')
+    writematrix([tspan;Prx3SSpos_storage],'DAAO_Data_RandomSampling_Prx3SSpos_storage.xlsx')
+    writematrix([tspan;Prx3SOOHpos_storage],'DAAO_Data_RandomSampling_Prx3SOOHpos_storage.xlsx')
+    writematrix([tspan;Prx3_oxidationFraction_storage],'DAAO_Data_RandomSampling_Prx3_oxidation_fraction.xlsx')
+
+out = n;
+end
+
+function [out] = PeroxideClearanceModel_HeLa_DAAOmito_efflux(kDAAO,kefflux,tspan,x0)
+% Model for hydrogen peroxide consumption
+% Kassi T. Stein
+% June 2018
+% takes as input the baseline initial conditions from running
+% runPeroxideClearanceModel_mito_Srx, a rate of H2O2 generation from DAAO
+% (the perturbation term) and an iteration number (to generate the Excel
+% file)
+% outputs a matrix with the first column as time and each subsequent column
+% as the species from x
+% also outputs an Excel file with each iteration of the parameter sweep on
+% its own worksheet (make sure to specify a filename)
+
+
+%% Define model parameters
+
+% Define model parameters
+k = zeros(29,1);
+% Intracellular peroxide production
+k(1) = 4; %uM/s OCR est
+% GPx1red reacting with H2O2
+k(2) = 60; % uM^-1*s^-1
+% GPx1ox reacting with GSH
+k(3) = 4e-2; % uM^-1*s^-1
+% GPx-SSG reacting with GSH
+k(4) = 10; % uM^-1*s^-1 (assuming same for both isoforms)
+% Km of NADP+
+k(5) = 57; % uM
+% Prx3-SH oxidized by H2O2
+k(6) = 20; % uM^-1*s^-1
+% Prx3-SOH over-oxidized by H2O2
+k(7) = 1.4e-2; % uM^-1*s^-1
+% Reduction of overoxidized Prx3 by Srx enzyme
+k(8) = 3e-3; % uM^-1*s^-1 
+% Self-catalyzed disulfide formation of Prx3-SS from Prx3-SOH
+k(9) = 20; % s^-1
+% Prx3 is reduced by thioredoxin
+k(10) = 2.2e-1; % uM^-1*s^-1
+% Auto-oxidation of GSH
+k(11) = 7.4e-05; % s^-1
+% Pr-SH oxidized by H2O2
+k(12) = 1e-4; % uM^-1*s^-1
+% Pr-SOH glutathionylated by GSH
+k(13) = 1.2e-1; % uM^-1*s^-1
+% Grx2-SH de-glutathionylates Protein-SSG
+k(14) = 1.2e-2; % uM^-1*s^-1
+% GSH de-glutathionylates Grx2-SSG
+k(15) = 3.7e-2; % uM^-1*s^-1
+% Pr-(SH)2 oxidized by H2O2
+k(16) = 1e-4; % uM^-1*s^-1
+% Pr-SS reduced by Trx
+k(17) = 1e-4; % uM^-1*s^-1
+% GSSG reduced by GR
+k(18) = 3.2; % uM^-1*s^-1
+% Oxidized Thioredoxin reduced by TrxR
+k(19) = 20; % uM^-1*s^-1
+% Regeneration of NADPH 
+k(20) = 3.75e2; % uM/s 
+% GSH import
+k(21) = 4.8e-1; % uM/s
+% GSH export + degradation
+k(22) = 3.2e-2; % uM/s
+%Prx5-SH oxidized by H2O2
+k(23) = 3e-1; %uM^-1 s^-1
+%Prx5-SOH auto-catalyzes to Prx5-SS
+k(24) = 14.7; %s^-1
+%Prx5-SS reduced by Trx2
+k(25) = 2; % uM^-1 s^-1
+%GPx4red oxidized by H2O2
+k(26) = 4.8e-2; % uM^-1 s^-1
+%Gpx4ox reacting with GSH
+k(27) = 2e-2; % uM^-1 s^-1
+%DAAO producing H2O2
+k(28) = kDAAO; %uM/s will vary this for parameter sweep
+%Srx import
+k(29) = 1.23e-5; %uM/s
+% H2O2 efflux
+k(30) = kefflux; % efflux
+
+
+%% Integration
+% Solver Parameters
+% tf = 3600; % stop time (s)
+%ode15s is a stiff ODE solver, so will use variable time steps at short vs.
+%long times; only need to specify start and end time, not time steps
+
+%force function to be positive
+negspan = [1:28];
+options=odeset('AbsTol',1E-10,'RelTol',1E-4,'NonNegative',negspan);
+tic
+[t,x]=ode15s(@crankDAAOefflux,tspan,x0,options,k);
+toc
+
+Prx3_oxidation_fraction = x(:,10)./(x(:,10)+x(:,7)+x(:,8)+x(:,9)); % Calculate the fraction of Prx3 oxidation
+
+out = [t, x, Prx3_oxidation_fraction]; 
+
+
+end
+
+   function dxdt = crankDAAOefflux(t, x, k)% Define model parameters 
+dxdt= x; % setting up vector containing derivatives
+dxdt(1) = k(1) + k(28) - k(30)*x(1) - k(2)*x(2)*x(1) - k(6)*x(7)*x(1) - k(7)*x(8)*x(1)... 
+    - k(12)*x(13)*x(1) - k(16)*x(18)*x(1)-k(23)*x(22)*x(1)-k(26)*x(25)*x(1); % H2O2
+dxdt(2) = -k(2)*x(2)*x(1) + k(4)*x(4)*x(5); % GPX1red
+dxdt(3) = k(2)*x(2)*x(1) - k(3)*x(3)*x(5); % GPX1ox
+dxdt(4) = k(3)*x(3)*x(5) - k(4)*x(4)*x(5); % GPX1-SG
+dxdt(5) = -k(3)*x(3)*x(5) - k(4)*x(4)*x(5) - 2*k(11)*x(5)... 
+    - k(13)*x(14)*x(5) - k(15)*x(17)*x(5) + 2*k(18)*x(6)*x(20) + k(21) - k(22)...
+    - k(27)*x(26)*x(5) - k(4)*x(27)*x(5); % GSH
+dxdt(6) = k(4)*x(4)*x(5) + k(11)*x(5) + k(15)*x(17)*x(5) + k(4)*x(27)*x(5) - k(18)*x(6)*x(20); % GSSG
+dxdt(7) = -k(6)*x(7)*x(1) + k(10)*x(10)*x(11); % Prx3-SH
+dxdt(8) = k(6)*x(7)*x(1) - k(7)*x(8)*x(1) + k(8)*x(9)*x(28) - k(9)*x(8); % Prx-SOH
+dxdt(9) = k(7)*x(8)*x(1) - k(8)*x(9)*x(28); % Prx-SOOH
+dxdt(10) = k(9)*x(8) - k(10)*x(10)*x(11); % Prx3-SS
+dxdt(11) = -k(10)*x(10)*x(11) - k(17)*x(19)*x(11) - k(25)*x(24)*x(11)...
+    + k(19)*x(12)*x(20); % Trx-SH
+dxdt(12) = k(10)*x(10)*x(11) + k(17)*x(19)*x(11) + k(25)*x(24)*x(11)...
+    - k(19)*x(12)*x(20); % Trx-SS
+dxdt(13) = -k(12)*x(13)*x(1) + k(14)*x(16)*x(15); % Pr-SH
+dxdt(14) = k(12)*x(13)*x(1) - k(13)*x(14)*x(5); % Pr-SOH
+dxdt(15) = k(13)*x(14)*x(5) - k(14)*x(16)*x(15); % Pr-SSG
+dxdt(16) = k(15)*x(17)*x(5) - k(14)*x(16)*x(15); % Grx-SH
+dxdt(17) = k(14)*x(16)*x(15) - k(15)*x(17)*x(5); % Grx-SSG
+dxdt(18) = -k(16)*x(18)*x(1) + k(17)*x(19)*x(11); % Pr-(SH)2
+dxdt(19) = k(16)*x(18)*x(1) - k(17)*x(19)*x(11); % Pr-SS
+dxdt(20) = -k(18)*x(6)*x(20) - k(19)*x(12)*x(20) + k(20)*x(21)/(k(5) + x(21)); % NADPH
+dxdt(21) = k(18)*x(6)*x(20) + k(19)*x(12)*x(20) - k(20)*x(21)/(k(5) + x(21)); % NADP+
+dxdt(22) = -k(23)*x(22)*x(1) + k(25)*x(24)*x(11); %Prx5-SH
+dxdt(23) = k(23)*x(22)*x(1) - k(24)*x(23); %Prx5-SOH
+dxdt(24) = k(24)*x(23) - k(25)*x(24)*x(11); %Prx5-SS
+dxdt(25) = -k(26)*x(25)*x(1) + k(4)*x(27)*x(5); % GPX4red
+dxdt(26) = k(26)*x(25)*x(1) - k(27)*x(26)*x(5); % GPX4ox
+dxdt(27) = k(27)*x(26)*x(5) - k(4)*x(27)*x(5); % GPX4-SG
+dxdt(28) = k(29); %Srx
+    end
